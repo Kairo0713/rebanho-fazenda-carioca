@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão de Rebanho - Fazenda</title>
+<script src="https://wbkrsjtpvijzbsfyegmk.supabase.co"></script>
+<style>
+body { font-family: Arial; background: #f4f5f5; padding: 20px; }
+section { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+input, select, button { padding: 8px; margin: 5px; border-radius: 5px; border: 1px solid #ccc; }
+button { background: #2f855a; color: white; border: none; cursor: pointer; }
+button:hover { background: #276749; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+th { background: #e6fffa; }
+</style>
+</head>
+<body>
+
+<h1>Gestão de Rebanho - Fazenda</h1>
+
+<section>
+<h2>Lotes</h2>
+<input id="nomeLote" placeholder="Nome do Lote" />
+<button onclick="adicionarLote()">Adicionar Lote</button>
+<table id="tabelaLotes">
+<thead><tr><th>ID</th><th>Nome</th></tr></thead>
+<tbody></tbody>
+</table>
+</section>
+
+<section>
+<h2>Animais</h2>
+<input id="idAnimal" placeholder="ID do Animal" />
+<select id="categoriaAnimal">
+<option value="macho_0_12">Macho 0–12 meses</option>
+<option value="femea_0_12">Fêmea 0–12 meses</option>
+<option value="femea_13_24">Fêmea 13–24 meses</option>
+<option value="macho_13_24">Macho 13–24 meses</option>
+<option value="vaca_36">Vaca +36 meses</option>
+</select>
+<select id="loteAnimal"></select>
+<button onclick="adicionarAnimal()">Adicionar Animal</button>
+<table id="tabelaAnimais">
+<thead><tr><th>ID</th><th>Categoria</th><th>Lote</th><th>Status</th></tr></thead>
+<tbody></tbody>
+</table>
+</section>
+
+<section>
+<h2>Movimentação</h2>
+<select id="animalMover"></select>
+<select id="loteDestino"></select>
+<button onclick="moverAnimal()">Transferir</button>
+<table id="tabelaMovimentos">
+<thead><tr><th>ID Animal</th><th>De Lote</th><th>Para Lote</th></tr></thead>
+<tbody></tbody>
+</table>
+</section>
+
+<section>
+<h2>Nascimentos</h2>
+<input id="idFilhote" placeholder="ID do Filhote" />
+<select id="maeAnimal"></select>
+<select id="loteNascimento"></select>
+<select id="categoriaFilhote">
+<option value="macho_0_12">Macho</option>
+<option value="femea_0_12">Fêmea</option>
+</select>
+<button onclick="registrarNascimento()">Registrar Nascimento</button>
+<table id="tabelaNascimentos">
+<thead><tr><th>ID Filhote</th><th>Mãe</th><th>Lote</th></tr></thead>
+<tbody></tbody>
+</table>
+</section>
+
+<section>
+<h2>Vendas</h2>
+<select id="vacaVenda"></select>
+<button onclick="registrarVenda()">Registrar Venda</button>
+<table id="tabelaVendas">
+<thead><tr><th>ID Vaca</th><th>Lote</th></tr></thead>
+<tbody></tbody>
+</table>
+</section>
+
+<script>
+const SUPABASE_URL = 'SUA_PROJECT_URL';
+const SUPABASE_KEY = 'SUA_ANON_KEY';
+const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let lotes = [], animais = [];
+
+// -------------------- Lotes --------------------
+async function adicionarLote() {
+    const nome = document.getElementById('nomeLote').value.trim();
+    if(!nome) return alert('Digite o nome do lote');
+    await supabase.from('lotes').insert([{ nome }]);
+    listarLotes();
+}
+
+async function listarLotes() {
+    const { data } = await supabase.from('lotes').select('*');
+    lotes = data;
+    document.querySelector('#tabelaLotes tbody').innerHTML = data.map(l=>`<tr><td>${l.id}</td><td>${l.nome}</td></tr>`).join('');
+    ['loteAnimal','loteDestino','loteNascimento'].forEach(id=>{
+        document.getElementById(id).innerHTML = data.map(l=>`<option value="${l.id}">${l.nome}</option>`).join('');
+    });
+}
+
+// -------------------- Animais --------------------
+async function adicionarAnimal() {
+    const id = document.getElementById('idAnimal').value.trim();
+    const categoria = document.getElementById('categoriaAnimal').value;
+    const lote_id = parseInt(document.getElementById('loteAnimal').value);
+    if(!id) return alert('Digite o ID do animal');
+    await supabase.from('animais').insert([{id,categoria,lote_id,status:'ativo'}]);
+    listarAnimais();
+}
+
+async function listarAnimais() {
+    const { data } = await supabase.from('animais').select('*');
+    animais = data;
+    document.querySelector('#tabelaAnimais tbody').innerHTML = data.map(a=>`<tr><td>${a.id}</td><td>${a.categoria}</td><td>${lotes.find(l=>l.id===a.lote_id)?.nome||''}</td><td>${a.status}</td></tr>`).join('');
+    document.getElementById('animalMover').innerHTML = data.filter(a=>a.status==='ativo').map(a=>`<option value="${a.id}">${a.id}</option>`).join('');
+    document.getElementById('maeAnimal').innerHTML = data.filter(a=>['femea_13_24','vaca_36'].includes(a.categoria) && a.status==='ativo').map(a=>`<option value="${a.id}">${a.id}</option>`).join('');
+    document.getElementById('vacaVenda').innerHTML = data.filter(a=>a.categoria==='vaca_36' && a.status==='ativo').map(a=>`<option value="${a.id}">${a.id}</option>`).join('');
+}
+
+// -------------------- Movimentação --------------------
+async function moverAnimal() {
+    const animal_id = document.getElementById('animalMover').value;
+    const lote_destino = parseInt(document.getElementById('loteDestino').value);
+    const animal = animais.find(a=>a.id===animal_id);
+    if(!animal) return;
+    await supabase.from('animais').update({lote_id:lote_destino}).eq('id',animal_id);
+    await supabase.from('movimentacoes').insert([{animal_id,lote_origem:animal.lote_id,lote_destino}]);
+    listarAnimais();
+    listarMovimentos();
+}
+
+async function listarMovimentos() {
+    const { data } = await supabase.from('movimentacoes').select('*');
+    document.querySelector('#tabelaMovimentos tbody').innerHTML = data.map(m=>`<tr><td>${m.animal_id}</td><td>${lotes.find(l=>l.id===m.lote_origem)?.nome||''}</td><td>${lotes.find(l=>l.id===m.lote_destino)?.nome||''}</td></tr>`).join('');
+}
+
+// -------------------- Nascimentos --------------------
+async function registrarNascimento() {
+    const filhote_id = document.getElementById('idFilhote').value.trim();
+    const mae_id = document.getElementById('maeAnimal').value;
+    const lote_id = parseInt(document.getElementById('loteNascimento').value);
+    const categoria = document.getElementById('categoriaFilhote').value;
+    if(!filhote_id) return alert('Digite o ID do filhote');
+    await supabase.from('animais').insert([{id:filhote_id,categoria,lote_id,status:'ativo'}]);
+    await supabase.from('nascimentos').insert([{filhote_id,mae_id,lote_id}]);
+    listarAnimais();
+    listarNascimentos();
+}
+
+async function listarNascimentos() {
+    const { data } = await supabase.from('nascimentos').select('*');
+    document.querySelector('#tabelaNascimentos tbody').innerHTML = data.map(n=>`<tr><td>${n.filhote_id}</td><td>${n.mae_id}</td><td>${lotes.find(l=>l.id===n.lote_id)?.nome||''}</td></tr>`).join('');
+}
+
+// -------------------- Vendas --------------------
+async function registrarVenda() {
+    const animal_id = document.getElementById('vacaVenda').value;
+    const vaca = animais.find(a=>a.id===animal_id);
+    if(!vaca) return;
+    await supabase.from('animais').update({status:'vendido'}).eq('id',animal_id);
+    await supabase.from('vendas').insert([{animal_id,lote_id:vaca.lote_id}]);
+    listarAnimais();
+    listarVendas();
+}
+
+async function listarVendas() {
+    const { data } = await supabase.from('vendas').select('*');
+    document.querySelector('#tabelaVendas tbody').innerHTML = data.map(v=>`<tr><td>${v.animal_id}</td><td>${lotes.find(l=>l.id===v.lote_id)?.nome||''}</td></tr>`).join('');
+}
+
+// -------------------- Inicialização --------------------
+listarLotes();
+listarAnimais();
+listarMovimentos();
+listarNascimentos();
+listarVendas();
+</script>
+</body>
+</html>
